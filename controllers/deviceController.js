@@ -11,12 +11,11 @@ class DeviceController {
 
     async create(req, res, next) {
         try {
-            let {name, price, brandId, typeId, info} = req.body
+            let {name, price, brandId, typeId, info,testId} = req.body
             const {img} = req.files
             let fileName = v4() + ".jpg"
-            console.log(__dirname)
             img.mv(path.resolve(__dirname, "..", "static", fileName))
-            const device = await model.Device.create({name, price, brandId, typeId, img: fileName})
+            const device = await model.Device.create({name, price, brandId,testId, typeId, img: fileName})
 
             if (info) {
                 info = JSON.parse(info)

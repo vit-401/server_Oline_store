@@ -1,55 +1,88 @@
 import ApiError from "../error/ApiError.js";
 import bcrypt from "bcrypt"
 import models from "../models/models.js"
-import jwt from "jsonwebtoken"
 import dotenv from "dotenv";
+import userService from "../service/user-service.js";
+import {validationResult} from "express-validator"
+import tokenService from "../service/token-service.js";
+
 
 dotenv.config()
 
-const generateJWT = (id, email, role) => {
-    return jwt.sign(
-        {id, email, role},
-        process.env.SECRET_KEY,
-        {expiresIn: "24h"}
-    )
-}
 
 class UserController {
     async registration(req, res, next) {
-        const {email, password, role} = req.body
-        if (!email && !password) {
-            return next(ApiError.badRequest("bad email or password"))
+        try {
+            const errors = validationResult(req)
+            if (!errors.isEmpty()) {
+                return next(ApiError.badRequest("validation Error", errors.array()))
+            }
+            const {email, password, role} = req.body
+
+            const data = await userService.registration(email, password, role)
+            res.cookie(
+                'refreshToken',
+                data.refreshToken,
+                {maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true}
+            )
+            return res.json(data)
+        } catch (e) {
+            next(e)
         }
-        const candidate = await models.User.findOne({where: {email}})
-        if (candidate) {
-            return next(ApiError.badRequest("user with this email already exist"))
-        }
-        const hashPassword = await bcrypt.hash(password, 5)
-        const user = await models.User.create({email, role, password: hashPassword})
-        const basket = await models.Basket.create({userId: user.id})
-        const jwtToken = generateJWT(user.id, user.email, user.role)
-        return res.json({token: jwtToken})
     }
+
 
     async login(req, res, next) {
-        const {email, password} = req.body
-        const user = await models.User.findOne({where: {email}})
-        if (!user) {
-            return next(ApiError.internal("user with this email was not found"))
+        try {
+            const {email, password} = req.body
+            const userData = await userService.login(email, password)
+            res.cookie(
+                'refreshToken',
+                userData.tokens.refreshToken,
+                {maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true}
+            )
+            return res.json(userData)
+        } catch (e) {
+            next(ApiError.internal(e))
         }
-        let comparePassword = bcrypt.compareSync(password, user.password)
-        if (!comparePassword) {
-            return next(ApiError.internal("Incorrect password"))
-        }
-        const jwtToken = generateJWT(user.id, user.email, user.role)
-        return res.json({token: jwtToken})
 
     }
 
-    async check(req, res, next) {
-        const jwtToken = generateJWT(req.user.id, req.user.email, req.user.role)
-        return res.json({token: jwtToken})
 
+
+    async activate(req, res, next) {
+        try {
+            const activationLink = req.params.link
+            await userService.activate(activationLink)
+            return res.redirect(process.env.CLIENT_URL)
+        } catch (e) {
+            throw new Error(e)
+        }
+
+    }
+
+    async getAll(req, res, next) {
+        try {
+            const users = await models.User.findAll({attributes:["email","id", "role"]})
+
+            return res.json(users)
+        } catch (e) {
+            throw new Error(e)
+        }
+    }
+    async refresh(req, res, next) {
+        try {
+         const {refreshToken} = req.cookies
+            const user_data = await userService.refresh(refreshToken)
+            res.cookie(
+                'refreshToken',
+                user_data.tokens.refreshToken,
+                {maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true}
+            )
+            return res.json(user_data)
+        } catch (e) {
+            next(e)
+        }
     }
 }
 

@@ -14,16 +14,3 @@ export default new Sequelize(
         port: process.env.DB_PORT,
     }
 )
-
-// import {Sequelize} from "sequelize";
-//
-// export default new Sequelize(
-//     "online_store",
-//     "postgres",
-//     "virus809696",
-//     {
-//         dialect: "postgres",
-//         host: "localhost",
-//         port: "5432"
-//     }
-// )
